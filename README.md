@@ -9,7 +9,8 @@
 - [ ] Impredicative sorts
 - [ ] Compile-time computation
 - [ ] Algebraic effects
-- [ ] No natural language
+- [ ] Constructed language
+  - Linear writing system for Minecraft
 
 ### Editor
 
