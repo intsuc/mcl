@@ -8,9 +8,6 @@ object Type extends (S => Option[T]):
   def apply(source: S): Option[T] = synth(source)(using Map.empty)
 
   private def synth(term: S)(using ctx: Map[Int, S]): Option[T] = term match
-    case S.Prop =>
-      Some(T.Prop(S.Type(1)))
-
     case S.Type(level) =>
       Some(T.Type(level, S.Type(level + 1)))
 
