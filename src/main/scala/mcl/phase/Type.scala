@@ -1,44 +1,55 @@
 package mcl.phase
 
 import mcl.ast.Source.Term as S
-import mcl.ast.Typed.Term as T
 
 // TODO: normalization
-object Type extends (S => Option[T]):
-  def apply(source: S): Option[T] = synth(source)(using Map.empty)
+// TODO: substitution
+object Type extends (S => Option[S]):
+  type Ctx = Map[Int, S]
 
-  private def synth(term: S)(using ctx: Map[Int, S]): Option[T] = term match
+  private def normalize(term: S): S = ???
+
+  private def substitute(term: S, subst: Map[Int, S]): S = ???
+
+  private def inferConstrained[T <: S](term: S)(using ctx: Ctx): Option[T] =
+    for
+      typ <- infer(term)
+      result = normalize(typ) if result.isInstanceOf[T]
+    yield result.asInstanceOf[T]
+
+  private def infer(term: S)(using ctx: Ctx): Option[S] = term match
     case S.Type(level) =>
-      Some(T.Type(level, S.Type(level + 1)))
+      Some(S.Type(level + 1))
 
     case S.Fun(id, domain, codomain) =>
       for
-        domain <- synth(domain)
-        codomain <- synth(codomain)(using ctx + (id -> domain.typ))
-        S.Type(level1) = domain.typ
-        S.Type(level2) = codomain.typ
-        level = level1 max level2
-      yield T.Type(level, S.Type(level + 1))
+        S.Type(domainLevel) <- inferConstrained[S.Type](domain)
+        S.Type(codomainLevel) <- inferConstrained[S.Type](codomain)(using ctx + (id -> domain))
+      yield S.Type(domainLevel max codomainLevel)
 
     case S.App(operator, operand) =>
       for
-        operator <- synth(operator)
-        typ @ S.Fun(_, domain, codomain) = operator.typ
-        operand <- check(operand, domain)
-      yield T.App(operator, operand, typ)
+        S.Fun(id, domain, codomain) <- inferConstrained[S.Fun](operator)
+        _ <- check(operand, domain)
+      yield substitute(codomain, Map(id -> operand))
 
     case S.Var(id) =>
-      for typ <- ctx.get(id) yield T.Var(id, typ)
+      ctx.get(id)
 
     case S.Anno(target, annotation) =>
-      check(target, annotation)
+      for _ <- check(target, annotation) yield annotation
 
     case _ =>
       None
 
-  private def check(term: S, typ: S)(using ctx: Map[Int, S]): Option[T] = (term, typ) match
-    case (S.Abs(id1, body), typ @ S.Fun(id2, domain, codomain)) =>
-      for body <- check(body, codomain)(using ctx + (id1 -> domain)) yield T.Abs(id1, body, typ)
+  private def check(term: S, typ: S)(using ctx: Ctx): Option[Unit] = (term, typ) match
+    case (S.Abs(id, body), S.Fun(_, domain, codomain)) =>
+      for
+        _ <- inferConstrained[S.Type](domain)
+        _ <- check(body, codomain)(using ctx + (id -> domain))
+      yield ()
 
     case (term, typ) =>
-      for typ1 <- synth(term) if typ == typ1 yield typ1
+      for typ1 <- infer(term) if typ == typ1 yield ()
+
+  def apply(source: S): Option[S] = infer(source)(using Map.empty)
