@@ -10,17 +10,14 @@ object Type extends (S => Option[S]):
     case S.Fun(id, domain, codomain) =>
       S.Fun(id, substitute(domain), substitute(codomain))
 
-    case S.Abs(id, body) =>
-      S.Abs(id, substitute(body))
+    case S.Abs(id, domain, body) =>
+      S.Abs(id, substitute(domain), substitute(body))
 
     case S.App(operator, operand) =>
       S.App(substitute(operator), substitute(operand))
 
     case S.Var(id) if subst contains id =>
       subst(id)
-
-    case S.Anno(target, annotation) =>
-      S.Anno(substitute(target), substitute(annotation))
 
     case term =>
       term
@@ -29,18 +26,15 @@ object Type extends (S => Option[S]):
     case S.Fun(id, domain, codomain) =>
       S.Fun(id, normalize(domain), normalize(codomain))
 
-    case S.Abs(id, body) =>
-      S.Abs(id, normalize(body))
+    case S.Abs(id, domain, body) =>
+      S.Abs(id, normalize(domain), normalize(body))
 
     case S.App(operator, operand) =>
       normalize(operator) match
-      case S.Abs(id, body) =>
+      case S.Abs(id, domain, body) =>
         normalize(substitute(body)(using Map(id -> normalize(operand))))
       case operator =>
         S.App(operator, normalize(operand))
-
-    case S.Anno(target, annotation) =>
-      S.Anno(normalize(target), normalize(annotation))
 
     case term =>
       term
@@ -67,29 +61,22 @@ object Type extends (S => Option[S]):
         S.Type(codomainLevel) <- inferType(codomain)(using ctx + (id -> domain))
       yield S.Type(domainLevel max codomainLevel)
 
+    case S.Abs(id, domain, body) =>
+      for
+        _ <- inferType(domain)
+        codomain <- infer(body)(using ctx + (id -> domain))
+      yield S.Fun(id, domain, codomain)
+
     case S.App(operator, operand) =>
       for
         S.Fun(id, domain, codomain) <- inferFun(operator)
-        _ <- check(operand, domain)
+        if check(operand, domain)
       yield substitute(codomain)(using Map(id -> operand))
 
     case S.Var(id) =>
       ctx.get(id)
 
-    case S.Anno(target, annotation) =>
-      for _ <- check(target, annotation) yield annotation
-
-    case _ =>
-      None
-
-  private def check(term: S, typ: S)(using ctx: Ctx): Option[Unit] = (term, typ) match
-    case (S.Abs(id, body), S.Fun(_, domain, codomain)) =>
-      for
-        _ <- inferType(domain)
-        _ <- check(body, codomain)(using ctx + (id -> domain))
-      yield ()
-
-    case (term, typ) =>
-      for typ1 <- infer(term) if typ == typ1 yield ()
+  private def check(term: S, typ: S)(using ctx: Ctx): Boolean =
+    infer(term).map(_ == typ).getOrElse(false)
 
   def apply(source: S): Option[S] = infer(source)(using Map.empty)
