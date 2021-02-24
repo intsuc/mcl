@@ -7,10 +7,11 @@
 - [ ] Calculus of constructions
 - [ ] Inductive types
 - [ ] Impredicative sorts
+- [ ] Sized types
 - [ ] Compile-time computation
 - [ ] Algebraic effects
 - [ ] Constructed language
-  - Linear writing system for Minecraft
+  - Non-linear writing system
 
 ### Editor
 
