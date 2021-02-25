@@ -19,6 +19,9 @@ object Type extends (S => Option[S]):
     case S.Var(id) if subst contains id =>
       subst(id)
 
+    case S.Ind(id, constructors, body) =>
+      S.Ind(id, constructors, substitute(body))
+
     case term =>
       term
 
@@ -35,6 +38,9 @@ object Type extends (S => Option[S]):
         normalize(substitute(body)(using Map(id -> normalize(operand))))
       case operator =>
         S.App(operator, normalize(operand))
+
+    case S.Ind(id, constructors, body) =>
+      S.Ind(id, constructors, normalize(body))
 
     case term =>
       term
@@ -75,6 +81,9 @@ object Type extends (S => Option[S]):
 
     case S.Var(id) =>
       ctx.get(id)
+
+    case S.Ind(id, constructors, body) =>
+      infer(body)(using ctx + (id -> S.Type(0)) ++ constructors.map(_ -> S.Var(id)))
 
   private def check(term: S, typ: S)(using ctx: Ctx): Boolean =
     infer(term).map(_ == typ).getOrElse(false)

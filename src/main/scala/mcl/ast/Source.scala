@@ -7,3 +7,4 @@ object Source with
     case Abs(id: Int, domain: Term, body: Term)
     case App(operator: Term, operand: Term)
     case Var(id: Int)
+    case Ind(id: Int, constructors: Seq[Int], body: Term)
