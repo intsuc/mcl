@@ -88,4 +88,5 @@ object Type extends (S => Option[S]):
   private def check(term: S, typ: S)(using ctx: Ctx): Boolean =
     infer(term).map(_ == typ).getOrElse(false)
 
-  def apply(source: S): Option[S] = infer(source)(using Map.empty)
+  def apply(source: S): Option[S] =
+    for _ <- infer(source)(using Map.empty) yield source
