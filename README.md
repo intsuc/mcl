@@ -9,9 +9,10 @@
 - [x] Calculus of constructions
   - Highly expressive type system
 - [ ] Inductive types
-- [ ] Impredicative sorts
+  - Efficiency of computation
 - [ ] Sized types
   - Intuitive termination criteria
+  - Taming `maxCommandChainLength`
 - [ ] Compile-time computation
   - Due to poor runtime performance
 - [ ] Algebraic effects
@@ -27,15 +28,14 @@
   - Composability
 - [ ] Visual
   - Intuitive editing
-- [ ] Extensible
-- [ ] In-game
+- [ ] Integrated
   - Seamless development
 
 ### Target
 
 - [ ] Datapack
 - [ ] Java bytecode
-  - Efficient normalization
+  - Efficient compile-time computation
   - Minimal environment: Minecraft requires JVM
 
 ## References
