@@ -5,14 +5,21 @@ import mcl.ast.Source as S
 
 object Type extends (S.Exp => Option[S.Exp]):
   private enum Sem with
-    case Abs(domain: Sem, abstraction: Sem => Sem, constructor: (Sym, S.Exp, S.Exp) => S.Exp)
+    case Fun(domain: Sem, fum: Sem => Sem)
+    case Abs(domain: Sem, abs: Sem => Sem)
     case Acc(head: S.Exp, tail: Seq[Sem] = Seq.empty)
 
   extension (sem1: Sem) private def === (sem2: Sem): Boolean = (sem1, sem2) match
-    case (Sem.Abs(domain1, abstraction1, constructor1), Sem.Abs(domain2, abstraction2, constructor2)) =>
-      constructor1 == constructor2 && domain1 === domain2 && {
+    case (Sem.Fun(domain1, fun1), Sem.Fun(domain2, fun2)) =>
+      domain1 === domain2 && {
         val dummy = Sem.Acc(S.Exp.Var(Sym.fresh()))
-        abstraction1(dummy) === abstraction2(dummy)
+        fun1(dummy) === fun2(dummy)
+      }
+
+    case (Sem.Abs(domain1, abs1), Sem.Abs(domain2, abs2)) =>
+      domain1 === domain2 && {
+        val dummy = Sem.Acc(S.Exp.Var(Sym.fresh()))
+        abs1(dummy) === abs2(dummy)
       }
 
     case (Sem.Acc(head1, tail1), Sem.Acc(head2, tail2)) =>
@@ -22,21 +29,21 @@ object Type extends (S.Exp => Option[S.Exp]):
       false
 
   extension (operator: S.Exp) private def apply(operand: S.Exp): Sem = reflect(operator) match
-    case Sem.Abs(_, abstraction, _) =>
-      abstraction(reflect(operand))
+    case Sem.Fun(_, fun) =>
+      fun(reflect(operand))
+
+    case Sem.Abs(_, abs) =>
+      abs(reflect(operand))
 
     case Sem.Acc(head, tail) =>
       Sem.Acc(head, tail :+ reflect(operand))
 
-  private val constructorFun = S.Exp.Fun.apply
-  private val constructorAbs = S.Exp.Abs.apply
-
   private def reflect(exp: S.Exp)(using ctx: Map[Sym, Sem] = Map.empty): Sem = exp match
     case S.Exp.Fun(id, domain, codomain) =>
-      Sem.Abs(reflect(domain), sem => reflect(codomain)(using ctx + (id -> sem)), constructorFun)
+      Sem.Fun(reflect(domain), sem => reflect(codomain)(using ctx + (id -> sem)))
 
     case S.Exp.Abs(id, domain, body) =>
-      Sem.Abs(reflect(domain), sem => reflect(body)(using ctx + (id -> sem)), constructorAbs)
+      Sem.Abs(reflect(domain), sem => reflect(body)(using ctx + (id -> sem)))
 
     case S.Exp.App(operator, operand) =>
       operator(operand)
@@ -48,9 +55,13 @@ object Type extends (S.Exp => Option[S.Exp]):
       Sem.Acc(exp)
 
   private def reify(sem: Sem): S.Exp = sem match
-    case Sem.Abs(domain, abstraction, reifier) =>
+    case Sem.Fun(domain, abstraction) =>
       val id = Sym.fresh()
-      reifier(id, reify(domain), reify(abstraction(Sem.Acc(S.Exp.Var(id)))))
+      S.Exp.Fun(id, reify(domain), reify(abstraction(Sem.Acc(S.Exp.Var(id)))))
+
+    case Sem.Abs(domain, abstraction) =>
+      val id = Sym.fresh()
+      S.Exp.Abs(id, reify(domain), reify(abstraction(Sem.Acc(S.Exp.Var(id)))))
 
     case Sem.Acc(head, tail) =>
       tail.foldLeft(head)((operator, operand) => S.Exp.App(operator, reify(operand)))
