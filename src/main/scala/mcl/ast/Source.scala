@@ -3,10 +3,10 @@ package mcl.ast
 import mcl.Sym
 
 object Source with
-  enum Term with
+  enum Exp with
     case Type(level: Int)
-    case Fun(id: Sym, domain: Term, codomain: Term)
-    case Abs(id: Sym, domain: Term, body: Term)
-    case App(operator: Term, operand: Term)
+    case Fun(id: Sym, domain: Exp, codomain: Exp)
+    case Abs(id: Sym, domain: Exp, body: Exp)
+    case App(operator: Exp, operand: Exp)
     case Var(id: Sym)
-    case Ind(id: Sym, constructors: Seq[Sym], body: Term)
+    case Ind(id: Sym, constructors: Seq[Sym], body: Exp)

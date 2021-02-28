@@ -1,104 +1,104 @@
 package mcl.phase
 
 import mcl.Sym
-import mcl.ast.Source.Term as S
+import mcl.ast.Source as S
 
-object Type extends (S => Option[S]):
-  private enum Semantics with
-    case Abs(domain: Semantics, abstraction: Semantics => Semantics, constructor: (Sym, S, S) => S)
-    case Acc(head: S, tail: Seq[Semantics] = Seq.empty)
+object Type extends (S.Exp => Option[S.Exp]):
+  private enum Sem with
+    case Abs(domain: Sem, abstraction: Sem => Sem, constructor: (Sym, S.Exp, S.Exp) => S.Exp)
+    case Acc(head: S.Exp, tail: Seq[Sem] = Seq.empty)
 
-  extension (semantics1: Semantics) private def === (semantics2: Semantics): Boolean = (semantics1, semantics2) match
-    case (Semantics.Abs(domain1, abstraction1, constructor1), Semantics.Abs(domain2, abstraction2, constructor2)) =>
+  extension (sem1: Sem) private def === (sem2: Sem): Boolean = (sem1, sem2) match
+    case (Sem.Abs(domain1, abstraction1, constructor1), Sem.Abs(domain2, abstraction2, constructor2)) =>
       constructor1 == constructor2 && domain1 === domain2 && {
-        val dummy = Semantics.Acc(S.Var(Sym.fresh()))
+        val dummy = Sem.Acc(S.Exp.Var(Sym.fresh()))
         abstraction1(dummy) === abstraction2(dummy)
       }
 
-    case (Semantics.Acc(head1, tail1), Semantics.Acc(head2, tail2)) =>
+    case (Sem.Acc(head1, tail1), Sem.Acc(head2, tail2)) =>
       head1 == head2 && (tail1 zip tail2).forall(_ === _)
 
     case _ =>
       false
 
-  extension (operator: S) private def apply(operand: S): Semantics = reflect(operator) match
-    case Semantics.Abs(_, abstraction, _) =>
+  extension (operator: S.Exp) private def apply(operand: S.Exp): Sem = reflect(operator) match
+    case Sem.Abs(_, abstraction, _) =>
       abstraction(reflect(operand))
 
-    case Semantics.Acc(head, tail) =>
-      Semantics.Acc(head, tail :+ reflect(operand))
+    case Sem.Acc(head, tail) =>
+      Sem.Acc(head, tail :+ reflect(operand))
 
-  private val constructorFun = S.Fun.apply
-  private val constructorAbs = S.Abs.apply
+  private val constructorFun = S.Exp.Fun.apply
+  private val constructorAbs = S.Exp.Abs.apply
 
-  private def reflect(term: S)(using ctx: Map[Sym, Semantics] = Map.empty): Semantics = term match
-    case S.Fun(id, domain, codomain) =>
-      Semantics.Abs(reflect(domain), semantics => reflect(codomain)(using ctx + (id -> semantics)), constructorFun)
+  private def reflect(exp: S.Exp)(using ctx: Map[Sym, Sem] = Map.empty): Sem = exp match
+    case S.Exp.Fun(id, domain, codomain) =>
+      Sem.Abs(reflect(domain), sem => reflect(codomain)(using ctx + (id -> sem)), constructorFun)
 
-    case S.Abs(id, domain, body) =>
-      Semantics.Abs(reflect(domain), semantics => reflect(body)(using ctx + (id -> semantics)), constructorAbs)
+    case S.Exp.Abs(id, domain, body) =>
+      Sem.Abs(reflect(domain), sem => reflect(body)(using ctx + (id -> sem)), constructorAbs)
 
-    case S.App(operator, operand) =>
+    case S.Exp.App(operator, operand) =>
       operator(operand)
 
-    case S.Var(id) if ctx contains id =>
+    case S.Exp.Var(id) if ctx contains id =>
       ctx(id)
 
-    case term =>
-      Semantics.Acc(term)
+    case exp =>
+      Sem.Acc(exp)
 
-  private def reify(semantics: Semantics): S = semantics match
-    case Semantics.Abs(domain, abstraction, reifier) =>
+  private def reify(sem: Sem): S.Exp = sem match
+    case Sem.Abs(domain, abstraction, reifier) =>
       val id = Sym.fresh()
-      reifier(id, reify(domain), reify(abstraction(Semantics.Acc(S.Var(id)))))
+      reifier(id, reify(domain), reify(abstraction(Sem.Acc(S.Exp.Var(id)))))
 
-    case Semantics.Acc(head, tail) =>
-      tail.foldLeft(head)((operator, operand) => S.App(operator, reify(operand)))
+    case Sem.Acc(head, tail) =>
+      tail.foldLeft(head)((operator, operand) => S.Exp.App(operator, reify(operand)))
 
-  private def normalize(term: S): S = (reify compose reflect)(term)
+  private def normalize(exp: S.Exp): S.Exp = (reify compose reflect)(exp)
 
-  private def inferType(term: S)(using ctx: Map[Sym, S]): Option[S] =
+  private def inferType(exp: S.Exp)(using ctx: Map[Sym, S.Exp]): Option[S.Exp] =
     for
-      typ <- infer(term)
-      result @ S.Type(_) = normalize(typ)
+      typ <- infer(exp)
+      result @ S.Exp.Type(_) = normalize(typ)
     yield result
 
-  private def inferFun(term: S)(using ctx: Map[Sym, S]): Option[S] =
+  private def inferFun(exp: S.Exp)(using ctx: Map[Sym, S.Exp]): Option[S.Exp] =
     for
-      typ <- infer(term)
-      result @ S.Fun(_, _, _) = normalize(typ)
+      typ <- infer(exp)
+      result @ S.Exp.Fun(_, _, _) = normalize(typ)
     yield result
 
-  private def infer(term: S)(using ctx: Map[Sym, S]): Option[S] = term match
-    case S.Type(level) =>
-      Some(S.Type(level + 1))
+  private def infer(exp: S.Exp)(using ctx: Map[Sym, S.Exp]): Option[S.Exp] = exp match
+    case S.Exp.Type(level) =>
+      Some(S.Exp.Type(level + 1))
 
-    case S.Fun(id, domain, codomain) =>
+    case S.Exp.Fun(id, domain, codomain) =>
       for
-        S.Type(domainLevel) <- inferType(domain)
-        S.Type(codomainLevel) <- inferType(codomain)(using ctx + (id -> domain))
-      yield S.Type(domainLevel max codomainLevel)
+        S.Exp.Type(domainLevel) <- inferType(domain)
+        S.Exp.Type(codomainLevel) <- inferType(codomain)(using ctx + (id -> domain))
+      yield S.Exp.Type(domainLevel max codomainLevel)
 
-    case S.Abs(id, domain, body) =>
+    case S.Exp.Abs(id, domain, body) =>
       for
         _ <- inferType(domain)
         codomain <- infer(body)(using ctx + (id -> domain))
-      yield S.Fun(id, domain, codomain)
+      yield S.Exp.Fun(id, domain, codomain)
 
-    case S.App(operator, operand) =>
+    case S.Exp.App(operator, operand) =>
       for
-        fun @ S.Fun(_, domain, _) <- inferFun(operator)
+        fun @ S.Exp.Fun(_, domain, _) <- inferFun(operator)
         if check(operand, domain)
       yield reify(fun(operand))
 
-    case S.Var(id) =>
+    case S.Exp.Var(id) =>
       ctx.get(id)
 
-    case S.Ind(id, constructors, body) =>
-      infer(body)(using ctx + (id -> S.Type(0)) ++ constructors.map(_ -> S.Var(id)))
+    case S.Exp.Ind(id, constructors, body) =>
+      infer(body)(using ctx + (id -> S.Exp.Type(0)) ++ constructors.map(_ -> S.Exp.Var(id)))
 
-  private def check(term: S, typ: S)(using ctx: Map[Sym, S]): Boolean =
-    infer(term).map(reflect(_) === reflect(typ)).getOrElse(false)
+  private def check(exp: S.Exp, typ: S.Exp)(using ctx: Map[Sym, S.Exp]): Boolean =
+    infer(exp).map(reflect(_) === reflect(typ)).getOrElse(false)
 
-  def apply(source: S): Option[S] =
-    for _ <- infer(source)(using Map.empty) yield source
+  def apply(exp: S.Exp): Option[S.Exp] =
+    for _ <- infer(exp)(using Map.empty) yield exp
