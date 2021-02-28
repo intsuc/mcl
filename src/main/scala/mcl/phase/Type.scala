@@ -5,39 +5,41 @@ import mcl.ast.Source.Term as S
 
 object Type extends (S => Option[S]):
   private enum Semantics with
-    case Abs(domain: Semantics, abs: Semantics => Semantics, reifier: (Sym, S, S) => S)
+    case Abs(domain: Semantics, abstraction: Semantics => Semantics, constructor: (Sym, S, S) => S)
     case Acc(head: S, tail: Seq[Semantics] = Seq.empty)
 
-    def apply(operand: Semantics): Semantics = this match
-      case Abs(_, abs, _) =>
-        abs(operand)
+  extension (semantics1: Semantics) private def === (semantics2: Semantics): Boolean = (semantics1, semantics2) match
+    case (Semantics.Abs(domain1, abstraction1, constructor1), Semantics.Abs(domain2, abstraction2, constructor2)) =>
+      constructor1 == constructor2 && domain1 === domain2 && {
+        val dummy = Semantics.Acc(S.Var(Sym.fresh()))
+        abstraction1(dummy) === abstraction2(dummy)
+      }
 
-      case Acc(id, tail) =>
-        Acc(id, tail :+ operand)
+    case (Semantics.Acc(head1, tail1), Semantics.Acc(head2, tail2)) =>
+      head1 == head2 && (tail1 zip tail2).forall(_ === _)
 
-    def === (that: Semantics): Boolean = (this, that) match
-      case (Abs(domain1, abs1, reifier1), Abs(domain2, abs2, reifier2)) =>
-        val dummy = Acc(S.Var(Sym.fresh()))
-        reifier1 == reifier2 && domain1 === domain2 && abs1(dummy) === abs2(dummy)
+    case _ =>
+      false
 
-      case (Acc(head1, tail1), Acc(head2, tail2)) =>
-        head1 == head2 && tail1.zip(tail2).forall(_ === _)
+  extension (operator: S) private def apply(operand: S): Semantics = reflect(operator) match
+    case Semantics.Abs(_, abstraction, _) =>
+      abstraction(reflect(operand))
 
-      case _ =>
-        false
+    case Semantics.Acc(head, tail) =>
+      Semantics.Acc(head, tail :+ reflect(operand))
 
-  private val reifierFun = S.Fun.apply
-  private val reifierAbs = S.Abs.apply
+  private val constructorFun = S.Fun.apply
+  private val constructorAbs = S.Abs.apply
 
   private def reflect(term: S)(using ctx: Map[Sym, Semantics] = Map.empty): Semantics = term match
     case S.Fun(id, domain, codomain) =>
-      Semantics.Abs(reflect(domain), parameter => reflect(codomain)(using ctx + (id -> parameter)), reifierFun)
+      Semantics.Abs(reflect(domain), semantics => reflect(codomain)(using ctx + (id -> semantics)), constructorFun)
 
     case S.Abs(id, domain, body) =>
-      Semantics.Abs(reflect(domain), parameter => reflect(body)(using ctx + (id -> parameter)), reifierAbs)
+      Semantics.Abs(reflect(domain), semantics => reflect(body)(using ctx + (id -> semantics)), constructorAbs)
 
     case S.App(operator, operand) =>
-      reflect(operator)(reflect(operand))
+      operator(operand)
 
     case S.Var(id) if ctx contains id =>
       ctx(id)
@@ -46,33 +48,14 @@ object Type extends (S => Option[S]):
       Semantics.Acc(term)
 
   private def reify(semantics: Semantics): S = semantics match
-    case Semantics.Abs(domain, abs, reifier) =>
+    case Semantics.Abs(domain, abstraction, reifier) =>
       val id = Sym.fresh()
-      reifier(id, reify(domain), reify(abs(Semantics.Acc(S.Var(id)))))
+      reifier(id, reify(domain), reify(abstraction(Semantics.Acc(S.Var(id)))))
 
     case Semantics.Acc(head, tail) =>
       tail.foldLeft(head)((operator, operand) => S.App(operator, reify(operand)))
 
   private def normalize(term: S): S = (reify compose reflect)(term)
-
-  private def substitute(term: S)(using subst: Map[Sym, S]): S = term match
-    case S.Fun(id, domain, codomain) =>
-      S.Fun(id, substitute(domain), substitute(codomain))
-
-    case S.Abs(id, domain, body) =>
-      S.Abs(id, substitute(domain), substitute(body))
-
-    case S.App(operator, operand) =>
-      S.App(substitute(operator), substitute(operand))
-
-    case S.Var(id) if subst contains id =>
-      subst(id)
-
-    case S.Ind(id, constructors, body) =>
-      S.Ind(id, constructors, substitute(body))
-
-    case term =>
-      term
 
   private def inferType(term: S)(using ctx: Map[Sym, S]): Option[S] =
     for
@@ -104,9 +87,9 @@ object Type extends (S => Option[S]):
 
     case S.App(operator, operand) =>
       for
-        S.Fun(id, domain, codomain) <- inferFun(operator)
+        fun @ S.Fun(_, domain, _) <- inferFun(operator)
         if check(operand, domain)
-      yield substitute(codomain)(using Map(id -> operand))
+      yield reify(fun(operand))
 
     case S.Var(id) =>
       ctx.get(id)
