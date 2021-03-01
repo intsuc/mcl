@@ -12,7 +12,9 @@
   - Efficiency of computation
 - [ ] Sized types
   - Intuitive termination criteria
-  - Taming `maxCommandChainLength`
+- [ ] Graded types
+  - Erasure of irrelevant terms
+  - Garbage collection
 - [ ] Compile-time computation
   - Due to poor runtime performance
 - [ ] Algebraic effects
