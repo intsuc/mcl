@@ -9,25 +9,6 @@ object Type extends (S.Exp => Option[S.Exp]):
     case Abs(domain: Sem, abs: Sem => Sem)
     case Acc(head: S.Exp, tail: Seq[Sem] = Seq.empty)
 
-  extension (sem1: Sem) private def === (sem2: Sem): Boolean = (sem1, sem2) match
-    case (Sem.Fun(domain1, fun1), Sem.Fun(domain2, fun2)) =>
-      domain1 === domain2 && {
-        val dummy = Sem.Acc(S.Exp.Var(Sym.fresh()))
-        fun1(dummy) === fun2(dummy)
-      }
-
-    case (Sem.Abs(domain1, abs1), Sem.Abs(domain2, abs2)) =>
-      domain1 === domain2 && {
-        val dummy = Sem.Acc(S.Exp.Var(Sym.fresh()))
-        abs1(dummy) === abs2(dummy)
-      }
-
-    case (Sem.Acc(head1, tail1), Sem.Acc(head2, tail2)) =>
-      head1 == head2 && (tail1 zip tail2).forall(_ === _)
-
-    case _ =>
-      false
-
   extension (operator: S.Exp) private def apply(operand: S.Exp): Sem = reflect(operator) match
     case Sem.Fun(_, fun) =>
       fun(reflect(operand))
@@ -68,6 +49,28 @@ object Type extends (S.Exp => Option[S.Exp]):
 
   private def normalize(exp: S.Exp): S.Exp = (reify compose reflect)(exp)
 
+  extension (exp1: S.Exp) private def === (exp2: S.Exp): Boolean =
+    extension (sem1: Sem) def === (sem2: Sem): Boolean = (sem1, sem2) match
+      case (Sem.Fun(domain1, fun1), Sem.Fun(domain2, fun2)) =>
+        domain1 === domain2 && {
+          val dummy = Sem.Acc(S.Exp.Var(Sym.fresh()))
+          fun1(dummy) === fun2(dummy)
+        }
+
+      case (Sem.Abs(domain1, abs1), Sem.Abs(domain2, abs2)) =>
+        domain1 === domain2 && {
+          val dummy = Sem.Acc(S.Exp.Var(Sym.fresh()))
+          abs1(dummy) === abs2(dummy)
+        }
+
+      case (Sem.Acc(head1, tail1), Sem.Acc(head2, tail2)) =>
+        head1 == head2 && (tail1 zip tail2).forall(_ === _)
+
+      case _ =>
+        false
+
+    reflect(exp1) === reflect(exp2)
+
   private def inferType(exp: S.Exp)(using ctx: Map[Sym, S.Exp]): Option[S.Exp] =
     for
       typ <- infer(exp)
@@ -105,11 +108,17 @@ object Type extends (S.Exp => Option[S.Exp]):
     case S.Exp.Var(id) =>
       ctx.get(id)
 
+    // TODO: strict positivity
     case S.Exp.Ind(id, constructors, body) =>
-      infer(body)(using ctx + (id -> S.Exp.Type(0)) ++ constructors)
+      def result(typ: S.Exp): S.Exp = typ match
+        case S.Exp.Fun(_, _, codomain) => result(codomain)
+        case typ => typ
+      if constructors.forall((_, typ) => result(typ) === S.Exp.Var(id)) then
+        infer(body)(using ctx + (id -> S.Exp.Type(0)) ++ constructors)
+      else None
 
   private def check(exp: S.Exp, typ: S.Exp)(using ctx: Map[Sym, S.Exp]): Option[Unit] =
-    for typ1 <- infer(exp) if reflect(typ1) === reflect(typ) yield ()
+    for typ1 <- infer(exp) if typ1 === typ yield ()
 
   def apply(exp: S.Exp): Option[S.Exp] =
     for _ <- infer(exp)(using Map.empty) yield exp
