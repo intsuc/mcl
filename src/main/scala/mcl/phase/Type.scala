@@ -99,17 +99,17 @@ object Type extends (S.Exp => Option[S.Exp]):
     case S.Exp.App(operator, operand) =>
       for
         fun @ S.Exp.Fun(_, domain, _) <- inferFun(operator)
-        if check(operand, domain)
+        _ <- check(operand, domain)
       yield reify(fun(operand))
 
     case S.Exp.Var(id) =>
       ctx.get(id)
 
     case S.Exp.Ind(id, constructors, body) =>
-      infer(body)(using ctx + (id -> S.Exp.Type(0)) ++ constructors.map(_ -> S.Exp.Var(id)))
+      infer(body)(using ctx + (id -> S.Exp.Type(0)) ++ constructors)
 
-  private def check(exp: S.Exp, typ: S.Exp)(using ctx: Map[Sym, S.Exp]): Boolean =
-    infer(exp).map(reflect(_) === reflect(typ)).getOrElse(false)
+  private def check(exp: S.Exp, typ: S.Exp)(using ctx: Map[Sym, S.Exp]): Option[Unit] =
+    for typ1 <- infer(exp) if reflect(typ1) === reflect(typ) yield ()
 
   def apply(exp: S.Exp): Option[S.Exp] =
     for _ <- infer(exp)(using Map.empty) yield exp
