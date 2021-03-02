@@ -108,7 +108,7 @@ object Type extends (S.Exp => Option[S.Exp]):
     case S.Exp.Var(id) =>
       ctx.get(id)
 
-    case S.Exp.Ind(id, arity, constructors, body) =>
+    case S.Exp.Ind(id, arity @ S.Exp.Type(_) /* normalize? */, constructors, body) =>
       def result(typ: S.Exp): S.Exp = typ match
         case S.Exp.Fun(_, _, codomain) => result(codomain)
         case typ => typ
@@ -136,13 +136,15 @@ object Type extends (S.Exp => Option[S.Exp]):
 
       for
         arityLevel <- level(arity)
-        if constructors.forall((_, typ) => result(typ) === S.Exp.Var(id) && {
+        name = S.Exp.Var(id)
+        if constructors forall { (_, typ) =>
           val normalized = normalize(typ)
-          for
+          result(normalized) === name &&
+          (for
             constructorLevel <- level(normalized)(using ctx + (id -> S.Exp.Type(arityLevel - 1)))
             if constructorLevel < arityLevel && parameters(normalized).forall(positive(id, _, true))
-          yield ()
-        }.isDefined)
+          yield ()).isDefined
+        }
         body <- infer(body)(using ctx + (id -> arity) ++ constructors)
       yield body
 
