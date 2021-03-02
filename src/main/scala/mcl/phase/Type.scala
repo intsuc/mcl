@@ -129,7 +129,7 @@ object Type extends (S.Exp => Option[S.Exp]):
       for
         arityLevel <- level(arity)
         if constructors.forall((_, typ) => result(typ) === S.Exp.Var(id) &&
-          level(normalize(typ))(using ctx + (id -> S.Exp.Type(0))).map(_ < arityLevel).getOrElse(false))
+          level(normalize(typ))(using ctx + (id -> S.Exp.Type(arityLevel - 1))).map(_ < arityLevel).getOrElse(false))
         body <- infer(body)(using ctx + (id -> arity) ++ constructors)
       yield body
 
