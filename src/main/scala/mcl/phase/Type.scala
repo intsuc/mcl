@@ -108,7 +108,6 @@ object Type extends (S.Exp => Option[S.Exp]):
     case S.Exp.Var(id) =>
       ctx.get(id)
 
-    // TODO: strict positivity
     case S.Exp.Ind(id, arity, constructors, body) =>
       def result(typ: S.Exp): S.Exp = typ match
         case S.Exp.Fun(_, _, codomain) => result(codomain)
@@ -126,10 +125,24 @@ object Type extends (S.Exp => Option[S.Exp]):
         case S.Exp.Var(id) => ctx.get(id).flatMap(level)
         case S.Exp.Ind(_, _, _, body) => level(body)
 
+      def parameters(typ: S.Exp): Seq[S.Exp] = typ match
+        case S.Exp.Fun(_, domain, codomain) => domain +: parameters(codomain)
+        case typ => Seq(typ)
+
+      def positive(id: Sym, typ: S.Exp, pos: Boolean): Boolean = typ match
+        case S.Exp.Fun(_, domain, codomain) => positive(id, domain, !pos) && positive(id, codomain, pos)
+        case S.Exp.Var(id1) if id == id1 => pos
+        case _ => true
+
       for
         arityLevel <- level(arity)
-        if constructors.forall((_, typ) => result(typ) === S.Exp.Var(id) &&
-          level(normalize(typ))(using ctx + (id -> S.Exp.Type(arityLevel - 1))).map(_ < arityLevel).getOrElse(false))
+        if constructors.forall((_, typ) => result(typ) === S.Exp.Var(id) && {
+          val normalized = normalize(typ)
+          for
+            constructorLevel <- level(normalized)(using ctx + (id -> S.Exp.Type(arityLevel - 1)))
+            if constructorLevel < arityLevel && parameters(normalized).forall(positive(id, _, true))
+          yield ()
+        }.isDefined)
         body <- infer(body)(using ctx + (id -> arity) ++ constructors)
       yield body
 
