@@ -109,13 +109,29 @@ object Type extends (S.Exp => Option[S.Exp]):
       ctx.get(id)
 
     // TODO: strict positivity
-    case S.Exp.Ind(id, constructors, body) =>
+    case S.Exp.Ind(id, arity, constructors, body) =>
       def result(typ: S.Exp): S.Exp = typ match
         case S.Exp.Fun(_, _, codomain) => result(codomain)
         case typ => typ
-      if constructors.forall((_, typ) => result(typ) === S.Exp.Var(id)) then
-        infer(body)(using ctx + (id -> S.Exp.Type(0)) ++ constructors)
-      else None
+
+      def level(typ: S.Exp)(using ctx: Map[Sym, S.Exp]): Option[Int] = typ match
+        case S.Exp.Type(level) => Some(level)
+        case S.Exp.Fun(_, domain, codomain) =>
+          for
+            domain <- level(domain)
+            codomain <- level(codomain)
+          yield domain max codomain
+        case S.Exp.Abs(_, _, body) => level(body)
+        case S.Exp.App(operator, operand) => ???
+        case S.Exp.Var(id) => ctx.get(id).flatMap(level)
+        case S.Exp.Ind(_, _, _, body) => level(body)
+
+      for
+        arityLevel <- level(arity)
+        if constructors.forall((_, typ) => result(typ) === S.Exp.Var(id) &&
+          level(normalize(typ))(using ctx + (id -> S.Exp.Type(0))).map(_ < arityLevel).getOrElse(false))
+        body <- infer(body)(using ctx + (id -> arity) ++ constructors)
+      yield body
 
   private def check(exp: S.Exp, typ: S.Exp)(using ctx: Map[Sym, S.Exp]): Option[Unit] =
     for typ1 <- infer(exp) if typ1 === typ yield ()

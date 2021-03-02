@@ -10,4 +10,4 @@ object Source with
     case Abs(id: Sym, domain: Exp, body: Exp)
     case App(operator: Exp, operand: Exp)
     case Var(id: Sym)
-    case Ind(id: Sym, constructors: Seq[(Sym, Exp)], body: Exp)
+    case Ind(id: Sym, arity: Exp, constructors: Seq[(Sym, Exp)], body: Exp)
