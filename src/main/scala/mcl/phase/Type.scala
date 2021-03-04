@@ -5,6 +5,7 @@ import mcl.ast.Source.Exp
 
 object Type extends (Exp => Option[Exp]):
   private enum Sem with
+    case Type(level: Int)
     case Fun(domain: Sem, fum: Sem => Sem)
     case Abs(domain: Sem, abs: Sem => Sem)
     case Acc(head: Exp, tail: Seq[Sem] = Seq.empty)
@@ -19,7 +20,13 @@ object Type extends (Exp => Option[Exp]):
     case Sem.Acc(head, tail) =>
       Sem.Acc(head, tail :+ operand)
 
+    case _ =>
+      throw IllegalStateException()
+
   private def reflect(exp: Exp, ctx: Map[Sym, Sem] = Map.empty): Sem = exp match
+    case Exp.Type(level) =>
+      Sem.Type(level)
+
     case Exp.Fun(id, domain, codomain) =>
       Sem.Fun(reflect(domain, ctx), sem => reflect(codomain, ctx + (id -> sem)))
 
@@ -36,6 +43,9 @@ object Type extends (Exp => Option[Exp]):
       Sem.Acc(exp)
 
   private def reify(sem: Sem): Exp = sem match
+    case Sem.Type(level) =>
+      Exp.Type(level)
+
     case Sem.Fun(domain, abstraction) =>
       val id = Sym.fresh()
       Exp.Fun(id, reify(domain), reify(abstraction(Sem.Acc(Exp.Var(id)))))
@@ -71,7 +81,7 @@ object Type extends (Exp => Option[Exp]):
   private def inferType(exp: Exp)(using Map[Sym, Typ]): Option[Typ] =
     for
       typ <- infer(exp)
-      result @ Sem.Acc(Exp.Type(_), Seq()) = typ
+      result @ Sem.Type(_) = typ
     yield result
 
   private def inferFun(exp: Exp)(using Map[Sym, Typ]): Option[Typ] =
@@ -82,13 +92,13 @@ object Type extends (Exp => Option[Exp]):
 
   private def infer(exp: Exp)(using ctx: Map[Sym, Typ]): Option[Typ] = exp match
     case Exp.Type(level) =>
-      Some(reflect(Exp.Type(level + 1)))
+      Some(Sem.Type(level + 1))
 
     case Exp.Fun(id, domain, codomain) =>
       for
-        Sem.Acc(Exp.Type(domainLevel), Seq()) <- inferType(domain)
-        Sem.Acc(Exp.Type(codomainLevel), Seq()) <- inferType(codomain)(using ctx + (id -> reflect(domain)))
-      yield reflect(Exp.Type(domainLevel max codomainLevel))
+        Sem.Type(domainLevel) <- inferType(domain)
+        Sem.Type(codomainLevel) <- inferType(codomain)(using ctx + (id -> reflect(domain)))
+      yield Sem.Type(domainLevel max codomainLevel)
 
     case Exp.Abs(id, domain, body) =>
       for
