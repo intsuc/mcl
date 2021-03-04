@@ -8,7 +8,7 @@
 
 - [x] Calculus of constructions
   - Highly expressive type system
-- [x] Inductive types
+- [ ] Inductive types
   - Efficiency of computation
 - [ ] Sized types
   - Intuitive termination criteria
