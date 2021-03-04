@@ -6,15 +6,11 @@ import mcl.ast.Source.Exp
 object Type extends (Exp => Option[Exp]):
   private enum Sem with
     case Type(level: Int)
-    case Fun(domain: Sem, fum: Sem => Sem)
-    case Abs(domain: Sem, abs: Sem => Sem)
+    case Abs(domain: Sem, abs: Sem => Sem, typ: Boolean)
     case Acc(head: Exp, tail: Seq[Sem] = Seq.empty)
 
   extension (operator: Sem) private def apply(operand: Sem): Sem = operator match
-    case Sem.Fun(_, fun) =>
-      fun(operand)
-
-    case Sem.Abs(_, abs) =>
+    case Sem.Abs(_, abs, _) =>
       abs(operand)
 
     case Sem.Acc(head, tail) =>
@@ -28,10 +24,10 @@ object Type extends (Exp => Option[Exp]):
       Sem.Type(level)
 
     case Exp.Fun(id, domain, codomain) =>
-      Sem.Fun(reflect(domain, ctx), sem => reflect(codomain, ctx + (id -> sem)))
+      Sem.Abs(reflect(domain, ctx), sem => reflect(codomain, ctx + (id -> sem)), true)
 
     case Exp.Abs(id, domain, body) =>
-      Sem.Abs(reflect(domain, ctx), sem => reflect(body, ctx + (id -> sem)))
+      Sem.Abs(reflect(domain, ctx), sem => reflect(body, ctx + (id -> sem)), false)
 
     case Exp.App(operator, operand) =>
       reflect(operator, ctx)(reflect(operand, ctx))
@@ -46,25 +42,16 @@ object Type extends (Exp => Option[Exp]):
     case Sem.Type(level) =>
       Exp.Type(level)
 
-    case Sem.Fun(domain, abstraction) =>
+    case Sem.Abs(domain, abs, typ) =>
       val id = Sym.fresh()
-      Exp.Fun(id, reify(domain), reify(abstraction(Sem.Acc(Exp.Var(id)))))
-
-    case Sem.Abs(domain, abstraction) =>
-      val id = Sym.fresh()
-      Exp.Abs(id, reify(domain), reify(abstraction(Sem.Acc(Exp.Var(id)))))
+      val constructor = if typ then Exp.Fun.apply else Exp.Abs.apply
+      constructor(id, reify(domain), reify(abs(Sem.Acc(Exp.Var(id)))))
 
     case Sem.Acc(head, tail) =>
       tail.foldLeft(head)((operator, operand) => Exp.App(operator, reify(operand)))
 
   extension (sem1: Sem) private def === (sem2: Sem): Boolean = (sem1, sem2) match
-    case (Sem.Fun(domain1, fun1), Sem.Fun(domain2, fun2)) =>
-      domain1 === domain2 && {
-        val dummy = Sem.Acc(Exp.Var(Sym.fresh()))
-        fun1(dummy) === fun2(dummy)
-      }
-
-    case (Sem.Abs(domain1, abs1), Sem.Abs(domain2, abs2)) =>
+    case (Sem.Abs(domain1, abs1, typ1), Sem.Abs(domain2, abs2, typ2)) if typ1 == typ2 =>
       domain1 === domain2 && {
         val dummy = Sem.Acc(Exp.Var(Sym.fresh()))
         abs1(dummy) === abs2(dummy)
@@ -87,7 +74,7 @@ object Type extends (Exp => Option[Exp]):
   private def inferFun(exp: Exp)(using Map[Sym, Typ]): Option[Typ] =
     for
       typ <- infer(exp)
-      result @ Sem.Fun(_, _) = typ
+      result @ Sem.Abs(_, _, true) = typ
     yield result
 
   private def infer(exp: Exp)(using ctx: Map[Sym, Typ]): Option[Typ] = exp match
@@ -108,7 +95,7 @@ object Type extends (Exp => Option[Exp]):
 
     case Exp.App(operator, operand) =>
       for
-        fun @ Sem.Fun(domain, _) <- inferFun(operator)
+        fun @ Sem.Abs(domain, _, true) <- inferFun(operator)
         _ <- check(operand, domain)
       yield fun(reflect(operand))
 
