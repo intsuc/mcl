@@ -19,21 +19,21 @@ object Type extends (Exp => Option[Exp]):
     case _ =>
       throw IllegalStateException()
 
-  private def reflect(exp: Exp, ctx: Map[Sym, Sem] = Map.empty): Sem = exp match
+  private def reflect(exp: Exp, env: Map[Sym, Sem] = Map.empty): Sem = exp match
     case Exp.Type(level) =>
       Sem.Type(level)
 
     case Exp.Fun(id, domain, codomain) =>
-      Sem.Abs(reflect(domain, ctx), sem => reflect(codomain, ctx + (id -> sem)), true)
+      Sem.Abs(reflect(domain, env), sem => reflect(codomain, env + (id -> sem)), true)
 
     case Exp.Abs(id, domain, body) =>
-      Sem.Abs(reflect(domain, ctx), sem => reflect(body, ctx + (id -> sem)), false)
+      Sem.Abs(reflect(domain, env), sem => reflect(body, env + (id -> sem)), false)
 
     case Exp.App(operator, operand) =>
-      reflect(operator, ctx)(reflect(operand, ctx))
+      reflect(operator, env)(reflect(operand, env))
 
-    case Exp.Var(id) if ctx contains id =>
-      ctx(id)
+    case Exp.Var(id) if env contains id =>
+      env(id)
 
     case exp =>
       Sem.Acc(exp)
@@ -90,8 +90,9 @@ object Type extends (Exp => Option[Exp]):
     case Exp.Abs(id, domain, body) =>
       for
         _ <- inferType(domain)
-        codomain <- infer(body)(using ctx + (id -> reflect(domain)))
-      yield reflect(Exp.Fun(id, domain, reify(codomain)))
+        domain <- Some(reflect(domain))
+        codomain <- infer(body)(using ctx + (id -> domain))
+      yield Sem.Abs(domain, sem => reflect(reify(codomain), Map(id -> sem)), true)
 
     case Exp.App(operator, operand) =>
       for
