@@ -103,8 +103,20 @@ object Type extends (Exp => Option[Exp]):
     case Exp.Var(id) =>
       ctx.get(id)
 
+    // TODO: consistency
+    // TODO: positivity
     case Exp.Ind(id, arity, constructors, body) =>
-      ??? // TODO
+      def result(typ: Exp): Exp = typ match
+        case Exp.Fun(_, _, codomain) => result(codomain)
+        case typ => typ
+
+      for
+        _ <- inferType(arity)
+        universe @ Sem.Type(_) = reflect(result(arity))
+        arity <- Some(reflect(arity))
+        if constructors.forall((_, typ) => check(result(typ), universe)(using ctx + (id -> arity)).isDefined)
+        typ <- infer(body)(using ctx + (id -> arity) ++ constructors.map(_ -> reflect(_)))
+      yield typ
 
   private def check(exp: Exp, typ: Typ)(using Map[Sym, Typ]): Option[Unit] =
     for typ1 <- infer(exp) if typ1 === typ yield ()
