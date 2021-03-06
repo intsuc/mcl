@@ -1,133 +1,139 @@
 package mcl.phase
 
-import mcl.Sym
-import mcl.ast.Source.Exp
+object Type extends (Type.Exp => Option[Type.Exp]):
+  import Indices._
+  private object Indices with
+    opaque type Idx = Int
 
-object Type extends (Exp => Option[Exp]):
+    object Idx with
+      def apply(idx: Int): Idx = idx
+
+    extension (idx: Idx) def toInt: Int = idx
+
+  enum Exp with
+    case Typ(level: Int)
+    case Fun(domain: Exp, codomain: Exp)
+    case Abs(domain: Exp, body: Exp)
+    case App(operator: Exp, operand: Exp)
+    case Var(idx: Idx)
+
+  import Levels._
+  private object Levels with
+    opaque type Lvl = Int
+
+    object Lvl with
+      def apply(lvl: Int): Lvl = lvl
+
+    extension (lvl: Lvl)
+      def next: Lvl = lvl + 1
+      def toIdx(env: Lvl): Idx = Idx(lvl - env - 1)
+
+  private type Ctx = Seq[Sem]
+
+  private final case class Clo(env: Ctx, body: Exp) with
+    def apply(operand: Sem): Sem = reflect(operand +: env, body)
+
   private enum Sem with
-    case Type(level: Int)
-    case Fun(domain: Sem, fun: Sem => Sem)
-    case Abs(domain: Sem, abs: Sem => Sem)
+    case Typ(level: Int)
+    case Fun(domain: Sem, clo: Clo)
+    case Abs(domain: Sem, clo: Clo)
     case App(operator: Sem, operand: Sem)
-    case Var(id: Sym)
+    case Var(lvl: Lvl)
 
-  private def reflect(exp: Exp, env: Map[Sym, Sem] = Map.empty): Sem = exp match
-    case Exp.Type(level) =>
-      Sem.Type(level)
+  private def reflect(env: Ctx, exp: Exp): Sem = exp match
+    case Exp.Typ(level) =>
+      Sem.Typ(level)
 
-    case Exp.Fun(id, domain, codomain) =>
-      Sem.Fun(reflect(domain, env), sem => reflect(codomain, env + (id -> sem)))
+    case Exp.Fun(domain, codomain) =>
+      Sem.Fun(reflect(env, domain), Clo(env, codomain))
 
-    case Exp.Abs(id, domain, body) =>
-      Sem.Abs(reflect(domain, env), sem => reflect(body, env + (id -> sem)))
+    case Exp.Abs(domain, body) =>
+      Sem.Abs(reflect(env, domain), Clo(env, body))
 
-    case Exp.App(operator, operand) =>
-      (reflect(operator, env), reflect(operand, env)) match
-      case (Sem.Abs(_, abs), operand) => abs(operand)
+    case Exp.App(operator, operand) => (reflect(env, operator), reflect(env, operand)) match
+      case (Sem.Abs(_, clo), operand) => clo(operand)
       case (operator, operand) => Sem.App(operator, operand)
 
-    case Exp.Var(id) =>
-      env(id)
+    case Exp.Var(idx) =>
+      env(idx.toInt)
 
-  private def reify(sem: Sem): Exp = sem match
-    case Sem.Type(level) =>
-      Exp.Type(level)
+  private def reify(env: Lvl, sem: Sem): Exp = sem match
+    case Sem.Typ(level) =>
+      Exp.Typ(level)
 
-    case Sem.Fun(domain, fun) =>
-      val id = Sym.fresh()
-      Exp.Abs(id, reify(domain), reify(fun(Sem.Var(id))))
+    case Sem.Fun(domain, clo) =>
+      Exp.Fun(reify(env, domain), reify(env.next, clo(Sem.Var(env))))
 
-    case Sem.Abs(domain, abs) =>
-      val id = Sym.fresh()
-      Exp.Abs(id, reify(domain), reify(abs(Sem.Var(id))))
+    case Sem.Abs(domain, clo) =>
+      Exp.Abs(reify(env, domain), reify(env.next, clo(Sem.Var(env))))
 
     case Sem.App(operator, operand) =>
-      Exp.App(reify(operator), reify(operand))
+      Exp.App(reify(env, operator), reify(env, operand))
 
-    case Sem.Var(id) =>
-      Exp.Var(id)
+    case Sem.Var(lvl) =>
+      Exp.Var(lvl.toIdx(env))
 
-  extension (sem1: Sem) private def === (sem2: Sem): Boolean = (sem1, sem2) match
-    case (Sem.Type(level1), Sem.Type(level2)) =>
+  private def conv(env: Lvl, sem1: Sem, sem2: Sem): Boolean = (sem1, sem2) match
+    case (Sem.Typ(level1), Sem.Typ(level2)) =>
       level1 == level2
 
-    case (Sem.Fun(domain1, fun1), Sem.Fun(domain2, fun2)) =>
-      domain1 === domain2 && :
-        val dummy = Sem.Var(Sym.fresh())
-        fun1(dummy) === fun2(dummy)
+    case (Sem.Fun(domain1, clo1), Sem.Fun(domain2, clo2)) =>
+      conv(env, domain1, domain2) && conv(env.next, clo1(Sem.Var(env)), clo2(Sem.Var(env)))
 
-    case (Sem.Abs(domain1, abs1), Sem.Abs(domain2, abs2)) =>
-      domain1 === domain2 && :
-        val dummy = Sem.Var(Sym.fresh())
-        abs1(dummy) === abs2(dummy)
+    case (Sem.Abs(domain1, clo1), Sem.Abs(domain2, clo2)) =>
+      conv(env, domain1, domain2) && conv(env.next, clo1(Sem.Var(env)), clo2(Sem.Var(env)))
 
     case (Sem.App(operator1, operand1), Sem.App(operator2, operand2)) =>
-      operator1 === operator2 && operand1 === operand2
+      conv(env, operator1, operator2) && conv(env, operand1, operand2)
 
-    case (Sem.Var(id1), Sem.Var(id2)) =>
-      id1 == id2
+    case (Sem.Var(lvl1), Sem.Var(lvl2)) =>
+      lvl1 == lvl2
 
     case _ =>
       false
 
   private type Typ = Sem
 
-  private def inferType(exp: Exp)(using Map[Sym, Typ]): Option[Int] =
+  private def inferTyp(ctx: Ctx, exp: Exp): Option[Int] =
     for
-      typ <- infer(exp)
-      Sem.Type(level) = typ
+      typ <- infer(ctx, exp)
+      Sem.Typ(level) = typ
     yield level
 
-  private def inferFun(exp: Exp)(using Map[Sym, Typ]): Option[Typ] =
+  private def inferFun(ctx: Ctx, exp: Exp): Option[Typ] =
     for
-      typ <- infer(exp)
+      typ <- infer(ctx, exp)
       result @ Sem.Fun(_, _) = typ
     yield result
 
-  private def infer(exp: Exp)(using ctx: Map[Sym, Typ]): Option[Typ] = exp match
-    case Exp.Type(level) =>
-      Some(Sem.Type(level + 1))
+  private def infer(ctx: Ctx, exp: Exp): Option[Typ] = exp match
+    case Exp.Typ(level) =>
+      Some(Sem.Typ(level + 1))
 
-    case Exp.Fun(id, domain, codomain) =>
+    case Exp.Fun(domain, codomain) =>
       for
-        domainLevel <- inferType(domain)
-        codomainLevel <- inferType(codomain)(using ctx + (id -> reflect(domain)))
-      yield Sem.Type(domainLevel max codomainLevel)
+        domainLevel <- inferTyp(ctx, domain)
+        codomainLevel <- inferTyp(reflect(Seq.empty, domain) +: ctx, codomain)
+      yield Sem.Typ(domainLevel max codomainLevel)
 
-    case Exp.Abs(id, domain, body) =>
+    case Exp.Abs(domain, body) =>
       for
-        _ <- inferType(domain)
-        domain <- Some(reflect(domain))
-        codomain <- infer(body)(using ctx + (id -> domain))
-      yield Sem.Fun(domain, sem => reflect(reify(codomain), Map(id -> sem)))
+        _ <- inferTyp(ctx, domain)
+        domain <- Some(reflect(Seq.empty, domain))
+        _ <- infer(domain +: ctx, body)
+      yield Sem.Fun(domain, Clo(Seq.empty, body))
 
     case Exp.App(operator, operand) =>
       for
-        Sem.Fun(domain, abs) <- inferFun(operator)
-        _ <- check(operand, domain)
-      yield abs(reflect(operand))
+        Sem.Fun(domain, abs) <- inferFun(ctx, operator)
+        _ <- check(ctx, operand, domain)
+      yield abs(reflect(Seq.empty, operand))
 
-    case Exp.Var(id) =>
-      ctx.get(id)
+    case Exp.Var(idx) =>
+      ctx.lift(idx.toInt)
 
-    // TODO: consistency
-    // TODO: positivity
-    case Exp.Ind(id, arity, constructors, body) =>
-      def result(typ: Exp): Exp = typ match
-        case Exp.Fun(_, _, codomain) => result(codomain)
-        case typ => typ
-
-      for
-        _ <- inferType(arity)
-        universe @ Sem.Type(_) = reflect(result(arity))
-        arity <- Some(reflect(arity))
-        if constructors.forall((_, typ) => check(result(typ), universe)(using ctx + (id -> arity)).isDefined)
-        typ <- infer(body)(using ctx + (id -> arity) ++ constructors.map(_ -> reflect(_)))
-      yield typ
-
-  // TODO: more checking rules
-  private def check(exp: Exp, typ: Typ)(using Map[Sym, Typ]): Option[Unit] =
-    for t <- infer(exp) if t === typ yield ()
+  private def check(ctx: Ctx, exp: Exp, typ: Typ): Option[Unit] =
+    for t <- infer(ctx, exp) if conv(Lvl(ctx.size), t, typ) yield ()
 
   def apply(exp: Exp): Option[Exp] =
-    for _ <- infer(exp)(using Map.empty) yield exp
+    for _ <- infer(Seq.empty, exp) yield exp
