@@ -72,11 +72,11 @@ object Type extends (Exp => Option[Exp]):
 
   private type Typ = Sem
 
-  private def inferType(exp: Exp)(using Map[Sym, Typ]): Option[Typ] =
+  private def inferType(exp: Exp)(using Map[Sym, Typ]): Option[Int] =
     for
       typ <- infer(exp)
-      result @ Sem.Type(_) = typ
-    yield result
+      Sem.Type(level) = typ
+    yield level
 
   private def inferFun(exp: Exp)(using Map[Sym, Typ]): Option[Typ] =
     for
@@ -90,8 +90,8 @@ object Type extends (Exp => Option[Exp]):
 
     case Exp.Fun(id, domain, codomain) =>
       for
-        Sem.Type(domainLevel) <- inferType(domain)
-        Sem.Type(codomainLevel) <- inferType(codomain)(using ctx + (id -> reflect(domain)))
+        domainLevel <- inferType(domain)
+        codomainLevel <- inferType(codomain)(using ctx + (id -> reflect(domain)))
       yield Sem.Type(domainLevel max codomainLevel)
 
     case Exp.Abs(id, domain, body) =>
