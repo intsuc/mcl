@@ -40,7 +40,7 @@
   - Efficient compile-time computation
   - Minimal environment: Minecraft requires JVM
 
-## References
+## Bibliography
 
 - [Inductively Defined Types](https://doi.org/10.1007/3-540-52335-9_47) by Thierry Coquand, and Christine Paulin
 - [Introduction to the Calculus of Inductive Constructions](https://hal.inria.fr/hal-01094195) by Christine Paulin-Mohring
