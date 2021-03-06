@@ -52,16 +52,14 @@ object Type extends (Exp => Option[Exp]):
       level1 == level2
 
     case (Sem.Fun(domain1, fun1), Sem.Fun(domain2, fun2)) =>
-      domain1 === domain2 && {
+      domain1 === domain2 && :
         val dummy = Sem.Var(Sym.fresh())
         fun1(dummy) === fun2(dummy)
-      }
 
     case (Sem.Abs(domain1, abs1), Sem.Abs(domain2, abs2)) =>
-      domain1 === domain2 && {
+      domain1 === domain2 && :
         val dummy = Sem.Var(Sym.fresh())
         abs1(dummy) === abs2(dummy)
-      }
 
     case (Sem.App(operator1, operand1), Sem.App(operator2, operand2)) =>
       operator1 === operator2 && operand1 === operand2

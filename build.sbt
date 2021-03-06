@@ -3,4 +3,5 @@ lazy val root = project
   .settings(
     name := "mcl",
     scalaVersion := "3.0.0-RC1",
+    scalacOptions += "-Yindent-colons",
   )
