@@ -6,7 +6,7 @@
 
 ### Language
 
-- [x] Calculus of constructions
+- [x] CCω
   - Highly expressive type system
 - [ ] Inductive types
   - Efficiency of computation
