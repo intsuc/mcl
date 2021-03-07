@@ -28,6 +28,7 @@ object Type extends (Exp => Option[Exp]):
       Sem.Abs(reflect(env, domain), Clo(env, body))
 
     case Exp.App(operator, operand) => (reflect(env, operator), reflect(env, operand)) match
+      case (Sem.Fun(_, clo), operand) => clo(operand)
       case (Sem.Abs(_, clo), operand) => clo(operand)
       case (operator, operand) => Sem.App(operator, operand)
 
