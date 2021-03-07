@@ -1,33 +1,10 @@
 package mcl.phase
 
-object Type extends (Type.Exp => Option[Type.Exp]):
-  import Indices._
-  private object Indices with
-    opaque type Idx = Int
+import mcl.ast.Core.Exp
+import mcl.ast.Indices.*
+import Levels.*
 
-    object Idx with
-      def apply(idx: Int): Idx = idx
-
-    extension (idx: Idx) def toInt: Int = idx
-
-  enum Exp with
-    case Typ(level: Int)
-    case Fun(domain: Exp, codomain: Exp)
-    case Abs(domain: Exp, body: Exp)
-    case App(operator: Exp, operand: Exp)
-    case Var(idx: Idx)
-
-  import Levels._
-  private object Levels with
-    opaque type Lvl = Int
-
-    object Lvl with
-      def apply(lvl: Int): Lvl = lvl
-
-    extension (lvl: Lvl)
-      def next: Lvl = lvl + 1
-      def toIdx(env: Lvl): Idx = Idx(lvl - env - 1)
-
+object Type extends (Exp => Option[Exp]):
   private type Ctx = Seq[Sem]
 
   private final case class Clo(env: Ctx, body: Exp) with
