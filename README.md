@@ -8,15 +8,16 @@
 
 - [x] CCω
   - Highly expressive type system
+  - Optimization by proofs
 - [ ] Inductive types
   - Efficiency of computation
 - [ ] Sized types
-  - Intuitive termination criteria
+  - Type-based termination criteria
 - [ ] Graded types
   - Erasure of irrelevant terms
   - Garbage collection
 - [ ] Compile-time computation
-  - Due to poor runtime performance
+  - Taming poor runtime performance
 - [ ] Algebraic effects
 - [ ] Non-linear writing system
   - No natural language to avoid inconsistency
@@ -31,11 +32,13 @@
 - [ ] Visual
   - Intuitive editing
 - [ ] Integrated
+  - Editor as MOD
   - Seamless development
 
 ### Target
 
 - [ ] Datapack
+  - Main target
 - [ ] Java bytecode
   - Efficient compile-time computation
   - Minimal environment: Minecraft requires JVM
