@@ -78,12 +78,6 @@ object Type extends (Exp => Option[Exp]):
       Sem.Typ(level) = typ
     yield level
 
-  private def inferFun(ctx: Ctx, exp: Exp): Option[Typ] =
-    for
-      typ <- infer(ctx, exp)
-      result @ Sem.Fun(_, _) = typ
-    yield result
-
   private def infer(ctx: Ctx, exp: Exp): Option[Typ] = exp match
     case Exp.Typ(level) =>
       Some(Sem.Typ(level + 1))
@@ -103,9 +97,10 @@ object Type extends (Exp => Option[Exp]):
 
     case Exp.App(operator, operand) =>
       for
-        Sem.Fun(domain, abs) <- inferFun(ctx, operator)
+        typ <- infer(ctx, operator)
+        Sem.Fun(domain, clo) = typ
         _ <- check(ctx, operand, domain)
-      yield abs(reflect(Seq.empty, operand))
+      yield clo(reflect(Seq.empty, operand))
 
     case Exp.Var(idx) =>
       ctx.lift(idx.toInt)
