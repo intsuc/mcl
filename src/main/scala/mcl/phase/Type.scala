@@ -5,7 +5,7 @@ import mcl.ast.Indices.*
 import Levels.*
 
 object Type extends (Exp => Option[Exp]):
-  private type Ctx = Seq[Sem]
+  private type Ctx = Vector[Sem]
 
   private final case class Clo(env: Ctx, body: Exp) with
     def apply(operand: Sem): Sem = reflect(operand +: env, body)
@@ -85,22 +85,22 @@ object Type extends (Exp => Option[Exp]):
     case Exp.Fun(domain, codomain) =>
       for
         domainLevel <- inferTyp(ctx, domain)
-        codomainLevel <- inferTyp(reflect(Seq.empty, domain) +: ctx, codomain)
+        codomainLevel <- inferTyp(reflect(Vector.empty, domain) +: ctx, codomain)
       yield Sem.Typ(domainLevel max codomainLevel)
 
     case Exp.Abs(domain, body) =>
       for
         _ <- inferTyp(ctx, domain)
-        domain <- Some(reflect(Seq.empty, domain))
+        domain <- Some(reflect(Vector.empty, domain))
         _ <- infer(domain +: ctx, body)
-      yield Sem.Fun(domain, Clo(Seq.empty, body))
+      yield Sem.Fun(domain, Clo(Vector.empty, body))
 
     case Exp.App(operator, operand) =>
       for
         typ <- infer(ctx, operator)
         Sem.Fun(domain, clo) = typ
         _ <- check(ctx, operand, domain)
-      yield clo(reflect(Seq.empty, operand))
+      yield clo(reflect(Vector.empty, operand))
 
     case Exp.Var(idx) =>
       ctx.lift(idx.toInt)
@@ -109,4 +109,4 @@ object Type extends (Exp => Option[Exp]):
     for t <- infer(ctx, exp) if conv(Lvl(ctx.size), t, typ) yield ()
 
   def apply(exp: Exp): Option[Exp] =
-    for _ <- infer(Seq.empty, exp) yield exp
+    for _ <- infer(Vector.empty, exp) yield exp
