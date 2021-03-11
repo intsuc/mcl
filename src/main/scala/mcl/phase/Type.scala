@@ -5,9 +5,9 @@ import mcl.ast.Indices.*
 import Levels.*
 
 object Type extends (Exp => Option[Exp]):
-  private type Ctx = Vector[Sem]
+  private type Env = Vector[Sem]
 
-  private final case class Clo(env: Ctx, body: Exp) with
+  private final case class Clo(env: Env, body: Exp) with
     def apply(operand: Sem): Sem = reflect(operand +: env, body)
 
   private enum Sem with
@@ -19,7 +19,7 @@ object Type extends (Exp => Option[Exp]):
     case Inj(annotation: Sem, index: Int, target: Sem)
     case Var(lvl: Lvl)
 
-  private def reflect(env: Ctx, exp: Exp): Sem = exp match
+  private def reflect(env: Env, exp: Exp): Sem = exp match
     case Exp.Typ(level) =>
       Sem.Typ(level)
 
@@ -91,6 +91,15 @@ object Type extends (Exp => Option[Exp]):
 
   private type Typ = Sem
 
+  private final case class Ctx(sems: Env, typs: Vector[Typ]) with
+    def size: Int = sems.size
+
+  private object Ctx with
+    def empty: Ctx = Ctx(Vector.empty, Vector.empty)
+
+  extension (typ: Typ) private def +: (ctx: Ctx): Ctx =
+    Ctx(Sem.Var(Lvl(ctx.size)) +: ctx.sems, typ +: ctx.typs)
+
   private def inferTyp(ctx: Ctx, exp: Exp): Option[Int] =
     for Sem.Typ(level) <- infer(ctx, exp) yield level
 
@@ -101,21 +110,21 @@ object Type extends (Exp => Option[Exp]):
     case Exp.Fun(domain, codomain) =>
       for
         domainLevel <- inferTyp(ctx, domain)
-        codomainLevel <- inferTyp(reflect(Vector.empty, domain) +: ctx, codomain)
+        codomainLevel <- inferTyp(reflect(ctx.sems, domain) +: ctx, codomain)
       yield Sem.Typ(domainLevel max codomainLevel)
 
     case Exp.Abs(domain, body) =>
       for
         _ <- inferTyp(ctx, domain)
-        domain <- Some(reflect(Vector.empty, domain))
-        _ <- infer(domain +: ctx, body)
-      yield Sem.Fun(domain, Clo(Vector.empty, body))
+        domain <- Some(reflect(ctx.sems, domain))
+        body <- infer(domain +: ctx, body)
+      yield Sem.Fun(domain, Clo(ctx.sems, reify(Lvl(ctx.size), body)))
 
     case Exp.App(operator, operand) =>
       for
         Sem.Fun(domain, clo) <- infer(ctx, operator)
         _ <- check(ctx, operand, domain)
-      yield clo(reflect(Vector.empty, operand))
+      yield clo(reflect(ctx.sems, operand))
 
     case Exp.Sum(variants) =>
       val levels = for
@@ -129,16 +138,16 @@ object Type extends (Exp => Option[Exp]):
     case Exp.Inj(annotation, index, target) =>
       for
         _ <- inferTyp(ctx, annotation)
-        typ @ Sem.Sum(variants) = reflect(Vector.empty, annotation)
+        typ @ Sem.Sum(variants) = reflect(ctx.sems, annotation)
         variant <- variants.lift(index)
         _ <- check(ctx, target, variant)
       yield typ
 
     case Exp.Var(idx) =>
-      ctx.lift(idx.toInt)
+      Some(ctx.typs(idx.toInt))
 
   private def check(ctx: Ctx, exp: Exp, typ: Typ): Option[Unit] =
     for t <- infer(ctx, exp) if conv(Lvl(ctx.size), t, typ) yield ()
 
   def apply(exp: Exp): Option[Exp] =
-    for _ <- infer(Vector.empty, exp) yield exp
+    for _ <- infer(Ctx.empty, exp) yield exp
