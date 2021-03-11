@@ -15,6 +15,8 @@ object Type extends (Exp => Option[Exp]):
     case Fun(domain: Sem, clo: Clo)
     case Abs(domain: Sem, clo: Clo)
     case App(operator: Sem, operand: Sem)
+    case Sum(variants: Seq[Sem])
+    case Inj(annotation: Sem, index: Int, target: Sem)
     case Var(lvl: Lvl)
 
   private def reflect(env: Ctx, exp: Exp): Sem = exp match
@@ -28,9 +30,14 @@ object Type extends (Exp => Option[Exp]):
       Sem.Abs(reflect(env, domain), Clo(env, body))
 
     case Exp.App(operator, operand) => (reflect(env, operator), reflect(env, operand)) match
-      case (Sem.Fun(_, clo), operand) => clo(operand)
       case (Sem.Abs(_, clo), operand) => clo(operand)
       case (operator, operand) => Sem.App(operator, operand)
+
+    case Exp.Sum(variants) =>
+      Sem.Sum(variants.map(reflect(env, _)))
+
+    case Exp.Inj(annotation, index, target) =>
+      Sem.Inj(reflect(env, annotation), index, reflect(env, target))
 
     case Exp.Var(idx) =>
       env(idx.toInt)
@@ -48,6 +55,12 @@ object Type extends (Exp => Option[Exp]):
     case Sem.App(operator, operand) =>
       Exp.App(reify(env, operator), reify(env, operand))
 
+    case Sem.Sum(variants) =>
+      Exp.Sum(variants.map(reify(env, _)))
+
+    case Sem.Inj(annotation, index, target) =>
+      Exp.Inj(reify(env, annotation), index, reify(env, target))
+
     case Sem.Var(lvl) =>
       Exp.Var(lvl.toIdx(env))
 
@@ -64,6 +77,12 @@ object Type extends (Exp => Option[Exp]):
     case (Sem.App(operator1, operand1), Sem.App(operator2, operand2)) =>
       conv(env, operator1, operator2) && conv(env, operand1, operand2)
 
+    case (Sem.Sum(variants1), Sem.Sum(variants2)) =>
+      (variants1 zip variants2).forall(conv(env, _, _))
+
+    case (Sem.Inj(annotation1, index1, target1), Sem.Inj(annotation2, index2, target2)) =>
+      index1 == index2 && conv(env, annotation1, annotation2) && conv(env, target1, target2)
+
     case (Sem.Var(lvl1), Sem.Var(lvl2)) =>
       lvl1 == lvl2
 
@@ -73,10 +92,7 @@ object Type extends (Exp => Option[Exp]):
   private type Typ = Sem
 
   private def inferTyp(ctx: Ctx, exp: Exp): Option[Int] =
-    for
-      typ <- infer(ctx, exp)
-      Sem.Typ(level) = typ
-    yield level
+    for Sem.Typ(level) <- infer(ctx, exp) yield level
 
   private def infer(ctx: Ctx, exp: Exp): Option[Typ] = exp match
     case Exp.Typ(level) =>
@@ -97,10 +113,26 @@ object Type extends (Exp => Option[Exp]):
 
     case Exp.App(operator, operand) =>
       for
-        typ <- infer(ctx, operator)
-        Sem.Fun(domain, clo) = typ
+        Sem.Fun(domain, clo) <- infer(ctx, operator)
         _ <- check(ctx, operand, domain)
       yield clo(reflect(Vector.empty, operand))
+
+    case Exp.Sum(variants) =>
+      val levels = for
+        variant <- variants
+        level <- inferTyp(ctx, variant)
+      yield level
+      for
+        maxLevel <- levels.maxOption
+      yield Sem.Typ(maxLevel)
+
+    case Exp.Inj(annotation, index, target) =>
+      for
+        _ <- inferTyp(ctx, annotation)
+        typ @ Sem.Sum(variants) = reflect(Vector.empty, annotation)
+        variant <- variants.lift(index)
+        _ <- check(ctx, target, variant)
+      yield typ
 
     case Exp.Var(idx) =>
       ctx.lift(idx.toInt)
