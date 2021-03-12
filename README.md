@@ -1,16 +1,15 @@
 # mcl
 
 *mcl* is a research language for Minecraft.
+It provides efficiency and expressiveness on the powerful type system.
 
 ## Features
 
 ### Language
 
 - [x] CCω
-  - Highly expressive type system
+  - Full dependent type system
   - Optimization by proofs
-- [ ] Inductive types
-  - Efficiency of computation
 - [ ] Sized types
   - Type-based termination criteria
 - [ ] Graded types
@@ -19,12 +18,12 @@
 - [ ] Compile-time computation
   - Taming poor runtime performance
 - [ ] Algebraic effects
-- [ ] Non-linear writing system
-  - No natural language to avoid inconsistency
-  - Flexibility in 2+ dimensional space
 
 ### Editor
 
+- [ ] Non-linear writing system
+  - No natural language to avoid inconsistency
+  - Flexibility in 2+ dimensional space
 - [ ] Projectional
   - Rich grammar
   - Complete disambiguation
@@ -49,4 +48,7 @@
 - [Introduction to the Calculus of Inductive Constructions](https://hal.inria.fr/hal-01094195) by Christine Paulin-Mohring
 - [Towards Normalization by Evaluation for the βη-Calculus of Constructions](https://doi.org/10.1007/978-3-642-12251-4_17) by Andreas Abel
 - [Full Reduction at Full Throttle](https://doi.org/10.1007/978-3-642-25379-9_26) by Mathieu Boespflug, Maxime Dénès, and Benjamin Grégoire
+- [Checking Dependent Types with Normalization by Evaluation: A Tutorial (Haskell Version)](https://davidchristiansen.dk/tutorials/implementing-types-hs.pdf) by David Thrane Christiansen
+- [Inductive Types Deconstructed: The Calculus of United Constructions](https://doi.org/10.1145/3331554.3342607) by Stefan Monnier
 - [Complete Bidirectional Typing for the Calculus of Inductive Constructions](https://arxiv.org/abs/2102.06513) by Meven Lennon-Bertrand
+- [elaboration-zoo](https://github.com/AndrasKovacs/elaboration-zoo) by AndrasKovacs
