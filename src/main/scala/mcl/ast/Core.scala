@@ -11,5 +11,6 @@ object Core with
     case App(operator: Exp, operand: Exp)
     case Sum(variants: Seq[Exp])
     case Inj(index: Int, target: Exp)
+    case Fix(body: Exp)
     case Var(idx: Idx)
     case Ann(target: Exp, annotation: Exp)

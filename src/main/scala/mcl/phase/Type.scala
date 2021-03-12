@@ -18,6 +18,7 @@ object Type extends (Exp => Option[Exp]):
     case App(operator: Sem, operand: Sem)
     case Sum(variants: Seq[Sem])
     case Inj(index: Int, target: Sem)
+    case Fix(body: Sem)
     case Var(lvl: Lvl)
 
   extension (exp: Exp) private def unary_+ (using env: Env): Sem = exp match
@@ -39,6 +40,9 @@ object Type extends (Exp => Option[Exp]):
 
     case Exp.Inj(index, target) =>
       Sem.Inj(index, +target)
+
+    case Exp.Fix(body) =>
+      +body
 
     case Exp.Var(idx) =>
       env(idx.toInt)
@@ -64,6 +68,9 @@ object Type extends (Exp => Option[Exp]):
 
     case Sem.Inj(index, target) =>
       Exp.Inj(index, -target)
+
+    case Sem.Fix(_) =>
+      ???
 
     case Sem.Var(lvl) =>
       Exp.Var(lvl.toIdx(env))
@@ -117,8 +124,8 @@ object Type extends (Exp => Option[Exp]):
         codomainLevel <- (codomain *=>)(using (+domain)(using ctx.sems) +: ctx)
       yield Sem.Typ(domainLevel max codomainLevel)
 
-    case Exp.Abs(body) =>
-      ??? // TODO: error message
+    case Exp.Abs(_) =>
+      ???
 
     case Exp.App(operator, operand) =>
       for
@@ -135,8 +142,11 @@ object Type extends (Exp => Option[Exp]):
         maxLevel <- levels.maxOption
       yield Sem.Typ(maxLevel)
 
-    case Exp.Inj(index, target) =>
-      ??? // TODO: error message
+    case Exp.Inj(_, _) =>
+      ???
+
+    case Exp.Fix(_) =>
+      ???
 
     case Exp.Var(idx) =>
       Some(ctx.typs(idx.toInt))
@@ -157,6 +167,9 @@ object Type extends (Exp => Option[Exp]):
         variant <- variants.lift(index)
         _ <- target <== variant
       yield ()
+
+    case (Exp.Fix(body), typ) =>
+      (body <== typ)(using typ +: ctx)
 
     case (exp, typ) =>
       for t <- (exp ==>) if (t === typ)(using ctx.toLvl) yield ()
