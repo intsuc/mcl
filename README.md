@@ -7,8 +7,8 @@ It provides efficiency and expressiveness on the powerful type system.
 
 ### Language
 
-- [x] CCω
-  - Full dependent type system
+- [x] Dependent types
+  - Expressiveness
   - Optimization by proofs
 - [ ] Sized types
   - Type-based termination criteria
@@ -22,8 +22,9 @@ It provides efficiency and expressiveness on the powerful type system.
 ### Editor
 
 - [ ] Non-linear writing system
-  - No natural language to avoid inconsistency
+  - Graph-based language
   - Flexibility in 2+ dimensional space
+  - No natural language to avoid inconsistency
 - [ ] Projectional
   - Rich grammar
   - Complete disambiguation
@@ -39,8 +40,13 @@ It provides efficiency and expressiveness on the powerful type system.
 - [ ] Datapack
   - Main target
 - [ ] Java bytecode
+  - Self-hosting
   - Efficient compile-time computation
   - Minimal environment: Minecraft requires JVM
+
+### Handwaves
+
+- Homotopy type theory
 
 ## Bibliography
 
