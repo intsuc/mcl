@@ -9,7 +9,7 @@ object Type extends (Exp => Option[Exp]):
   private type Env = Vector[Sem]
 
   private final case class Clo(env: Env, body: Exp) with
-    def apply(operand: Sem): Sem = (+body)(using operand +: env)
+    def apply(operand: Sem): Sem = reflect(body)(using operand +: env)
 
   private enum Sem with
     case Typ(level: Int)
@@ -21,53 +21,53 @@ object Type extends (Exp => Option[Exp]):
     case Fix(body: Sem)
     case Var(lvl: Lvl)
 
-  extension (exp: Exp) private def unary_+ (using env: Env): Sem = exp match
+  private def reflect(exp: Exp)(using env: Env): Sem = exp match
     case Exp.Typ(level) =>
       Sem.Typ(level)
 
     case Exp.Fun(domain, codomain) =>
-      Sem.Fun(+domain, Clo(env, codomain))
+      Sem.Fun(reflect(domain), Clo(env, codomain))
 
     case Exp.Abs(body) =>
       Sem.Abs(Clo(env, body))
 
-    case Exp.App(operator, operand) => (+operator, +operand) match
+    case Exp.App(operator, operand) => (reflect(operator), reflect(operand)) match
       case (Sem.Abs(clo), operand) => clo(operand)
       case (operator, operand) => Sem.App(operator, operand)
 
     case Exp.Sum(variants) =>
-      Sem.Sum(variants.map(+_))
+      Sem.Sum(variants.map(reflect))
 
     case Exp.Inj(index, target) =>
-      Sem.Inj(index, +target)
+      Sem.Inj(index, reflect(target))
 
     case Exp.Fix(body) =>
-      +body
+      reflect(body)
 
     case Exp.Var(idx) =>
       env(idx.toInt)
 
     case Exp.Ann(target, _) =>
-      +target
+      reflect(target)
 
-  extension (sem: Sem) private def unary_- (using env: Lvl): Exp = sem match
+  private def reify(sem: Sem)(using env: Lvl): Exp = sem match
     case Sem.Typ(level) =>
       Exp.Typ(level)
 
     case Sem.Fun(domain, clo) =>
-      Exp.Fun(-domain, (-clo(Sem.Var(env)))(using env+))
+      Exp.Fun(reify(domain), reify(clo(Sem.Var(env)))(using env+))
 
     case Sem.Abs(clo) =>
-      Exp.Abs((-clo(Sem.Var(env)))(using env+))
+      Exp.Abs(reify(clo(Sem.Var(env)))(using env+))
 
     case Sem.App(operator, operand) =>
-      Exp.App(-operator, -operand)
+      Exp.App(reify(operator), reify(operand))
 
     case Sem.Sum(variants) =>
-      Exp.Sum(variants.map(-_))
+      Exp.Sum(variants.map(reify))
 
     case Sem.Inj(index, target) =>
-      Exp.Inj(index, -target)
+      Exp.Inj(index, reify(target))
 
     case Sem.Fix(_) =>
       ???
@@ -111,17 +111,14 @@ object Type extends (Exp => Option[Exp]):
   extension (typ: Typ) private def +: (ctx: Ctx): Ctx =
     Ctx(Sem.Var(ctx.toLvl) +: ctx.sems, typ +: ctx.typs)
 
-  extension (exp: Exp) private def *=> (using Ctx): Option[Int] =
-    for Sem.Typ(level) <- exp ==> yield level
-
   extension (exp: Exp) private def ==> (using ctx: Ctx): Option[Typ] = exp match
     case Exp.Typ(level) =>
       Some(Sem.Typ(level + 1))
 
     case Exp.Fun(domain, codomain) =>
       for
-        domainLevel <- (domain *=>)
-        codomainLevel <- (codomain *=>)(using (+domain)(using ctx.sems) +: ctx)
+        Sem.Typ(domainLevel) <- (domain ==>)
+        Sem.Typ(codomainLevel) <- (codomain ==>)(using reflect(domain)(using ctx.sems) +: ctx)
       yield Sem.Typ(domainLevel max codomainLevel)
 
     case Exp.Abs(_) =>
@@ -131,16 +128,16 @@ object Type extends (Exp => Option[Exp]):
       for
         Sem.Fun(domain, clo) <- (operator ==>)
         _ <- operand <== domain
-      yield clo((+operand)(using ctx.sems))
+      yield clo(reflect(operand)(using ctx.sems))
 
     case Exp.Sum(variants) =>
       val levels = for
         variant <- variants
-        level <- (variant *=>)
+        Sem.Typ(level) <- (variant ==>)
       yield level
       for
-        maxLevel <- levels.maxOption
-      yield Sem.Typ(maxLevel)
+        level <- levels.maxOption
+      yield Sem.Typ(level)
 
     case Exp.Inj(_, _) =>
       ???
@@ -153,8 +150,8 @@ object Type extends (Exp => Option[Exp]):
 
     case Exp.Ann(target, annotation) =>
       for
-        _ <- (annotation *=>)
-        annotation <- Some((+annotation)(using ctx.sems))
+        Sem.Typ(_) <- (annotation ==>)
+        annotation <- Some(reflect(annotation)(using ctx.sems))
         _ <- target <== annotation
       yield annotation
 
